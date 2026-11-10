@@ -1,0 +1,858 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+</head>
+<body>
+<title>Llama</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Nunito:wght@500;700;800&display=swap">
+<style>
+:root{
+  color-scheme:dark;
+  /* Layout: one centred column. Opponents on top, draw and discard piles in the middle, your own hand at the bottom. */
+  --bg:#17163a; --bg2:#201e4b; --panel:#27255a; --line:#3d3a85;
+  --fg:#f5f0e6; --dim:#b2afe0;
+  --gold:#f4b73f; --rose:#e2427c; --teal:#2bb7a8;
+  --card:#fbf8f1; --ink:#1a1938;
+  --c1:#0b8a82; --c2:#3f8f22; --c3:#a86a00; --c4:#d1481a; --c5:#be1f58; --c6:#6638c0;
+  --display:'Bagel Fat One',ui-rounded,'Arial Rounded MT Bold','Avenir Next Rounded',system-ui,sans-serif;
+  --body:'Nunito',ui-rounded,system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background-color:var(--bg);background-image:radial-gradient(120% 55% at 50% 40%,#2b2968 0%,rgba(23,22,58,0) 70%);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.4;-webkit-tap-highlight-color:transparent}
+#app{min-height:100%;display:flex;flex-direction:column}
+button,input{font-family:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
+h1,h2,p{margin:0}
+.weave{flex:none;height:12px;background-color:var(--bg2);background-repeat:repeat-x;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='12'%3E%3Cpath d='M12 0l6 6-6 6-6-6z' fill='%23f4b73f'/%3E%3Cpath d='M0 0l6 6-6 6zM24 0l-6 6 6 6z' fill='%23e2427c'/%3E%3Cpath d='M12 3l3 3-3 3-3-3z' fill='%232bb7a8'/%3E%3C/svg%3E")}
+.wrap{flex:1;width:100%;max-width:620px;margin-inline:auto;padding-block:14px 22px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px;min-width:0}
+.label{font-size:12px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--dim)}
+.dim{color:var(--dim)}
+
+/* buttons */
+.btn{min-height:48px;padding:0 18px;border-radius:14px;border:2px solid var(--line);background:var(--panel);font-weight:800;font-size:16px;cursor:pointer;transition:transform .12s}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--gold);border-color:var(--gold);color:var(--ink)}
+.btn.warn{border-color:var(--rose);color:#ffd3e2}
+.btn.small{min-height:40px;padding:0 14px;font-size:14px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+input[type=text]{width:100%;min-height:48px;padding:0 14px;border-radius:12px;border:2px solid var(--line);background:var(--bg);font-size:17px;font-weight:700}
+input[type=text]::placeholder{color:#7c79b8}
+.panel{background:var(--panel);border:2px solid var(--line);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+
+/* cards */
+.card{--w:56px;position:relative;display:grid;place-items:center;flex:none;width:var(--w);height:calc(var(--w)*1.42);padding:0;border:0;border-radius:calc(var(--w)*.15);background:var(--card);color:var(--cc,var(--ink));font-family:var(--display);font-size:calc(var(--w)*.66);line-height:1;box-shadow:0 2px 0 rgba(0,0,0,.35),0 8px 16px rgba(0,0,0,.28);user-select:none;-webkit-user-select:none}
+.card::after{content:"";position:absolute;inset:calc(var(--w)*.07);border:2px solid currentColor;border-radius:calc(var(--w)*.1);opacity:.3;pointer-events:none}
+.card svg{width:64%;height:auto;display:block}
+.v1{--cc:var(--c1)}.v2{--cc:var(--c2)}.v3{--cc:var(--c3)}.v4{--cc:var(--c4)}.v5{--cc:var(--c5)}.v6{--cc:var(--c6)}
+.v7{--cc:#2b1f5c;background:linear-gradient(160deg,#ffe7a3,#f4b73f 75%)}
+.back{background-color:#2c2a6e;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3Cpath d='M7 0l7 7-7 7-7-7z' fill='none' stroke='%23f4b73f' stroke-width='1.3'/%3E%3C/svg%3E");box-shadow:0 0 0 3px var(--card),0 8px 16px rgba(0,0,0,.28)}
+.back::after{display:none}
+.hand{--w:min(64px,calc((100vw - 76px)/6));display:flex;flex-wrap:wrap;justify-content:center;gap:10px 5px;padding-top:8px}
+.hand .card{cursor:default;transition:transform .15s}
+.hand .card.can{cursor:pointer;transform:translateY(-8px);outline:3px solid var(--gold);outline-offset:2px}
+.hand .card.no{opacity:.42;filter:saturate(.5)}
+.mc{display:inline-grid;place-items:center;width:22px;height:30px;border-radius:5px;background:var(--card);color:var(--cc,var(--ink));font-family:var(--display);font-size:16px;line-height:1;vertical-align:middle}
+.mc svg{width:15px;height:15px}
+.mc.dup{opacity:.35}
+
+/* home */
+.hero{display:grid;justify-items:center;gap:6px;padding-top:6px;text-align:center}
+.fan{display:flex;justify-content:center;height:112px;align-items:flex-end}
+.fan .card{--w:62px}
+.fan .card:nth-child(1){transform:rotate(-14deg) translateY(8px);margin-right:-18px}
+.fan .card:nth-child(2){transform:translateY(-4px);z-index:1}
+.fan .card:nth-child(3){transform:rotate(14deg) translateY(8px);margin-left:-18px}
+h1{font:400 56px/1 var(--display);letter-spacing:.01em;color:var(--gold);text-shadow:0 3px 0 #8d5200}
+.tag{max-width:30ch;color:var(--dim);text-wrap:balance}
+.field{display:grid;gap:6px}
+.row{display:flex;gap:10px;align-items:stretch}
+.row>*{min-width:0}
+.joinrow input{text-transform:uppercase;letter-spacing:.3em;text-align:center;flex:1}
+.seg{display:flex;gap:8px}
+.seg .btn{flex:1;padding:0;min-width:0}
+.seg .btn[aria-pressed=true]{background:var(--teal);border-color:var(--teal);color:var(--ink)}
+.note{font-size:13px;color:var(--dim)}
+hr{border:0;border-top:2px dashed var(--line);margin:2px 0;width:100%}
+details.rules{background:var(--panel);border:2px solid var(--line);border-radius:18px;padding:4px 16px}
+details.rules summary{min-height:44px;display:flex;align-items:center;font-weight:800;cursor:pointer}
+details.rules div{display:grid;gap:8px;padding:0 0 14px;color:#e4e1fa}
+details.rules b{color:var(--gold)}
+
+/* top bar */
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.logo{font:400 26px/1 var(--display);color:var(--gold)}
+.chip{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border-radius:999px;background:var(--panel);border:2px solid var(--line);white-space:nowrap;font-weight:800;font-size:13px;letter-spacing:.08em}
+
+/* lobby */
+.code{font:400 64px/1 var(--display);letter-spacing:.14em;color:var(--gold);text-align:center;padding-left:.14em}
+.plist{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.plist li{display:flex;align-items:center;gap:10px;min-height:48px;padding:6px 10px;border-radius:12px;background:var(--bg)}
+.plist .nm{flex:1;min-width:0}
+.tagpill{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:var(--line);color:var(--fg)}
+.tagpill.good{background:var(--teal);color:var(--ink)}
+.x{width:36px;height:36px;border-radius:10px;border:0;background:transparent;color:var(--dim);font-size:22px;cursor:pointer}
+
+/* table */
+.av{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--pc,var(--teal));color:var(--ink);font:400 16px/1 var(--display)}
+.opps{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.opp{min-width:0;display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:8px 10px;border:2px solid var(--line);border-radius:14px;background:var(--panel)}
+.opp.turn{border-color:var(--gold);box-shadow:0 0 0 3px rgba(244,183,63,.25)}
+.opp.out{opacity:.55}
+.nm{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:800}
+.meta{display:block;font-size:12px;color:var(--dim)}
+.pts{text-align:right}
+.pts b{font:400 20px/1 var(--display)}
+.bar{display:block;width:36px;height:4px;border-radius:2px;background:var(--line);margin:4px 0 0 auto;overflow:hidden}
+.bar i{display:block;height:100%;width:var(--p);background:var(--rose)}
+.mid{display:flex;justify-content:center;align-items:flex-start;gap:48px;padding:12px 0 4px}
+.pilecol{display:grid;justify-items:center;gap:10px}
+.stack{position:relative;width:70px;height:99px}
+.stack .card{--w:70px;position:absolute;left:0;top:0}
+.stack .card:nth-child(1){transform:translate(-4px,4px)}
+.stack .card:nth-child(2){transform:translate(-2px,2px)}
+.deckbtn{position:relative;border:0;background:none;padding:0;cursor:pointer;border-radius:12px}
+.deckbtn:disabled{cursor:default;opacity:.7}
+.deckbtn.go .stack{animation:nudge 1.4s ease-in-out infinite}
+.deckbtn .cnt{position:absolute;right:-12px;bottom:-10px;z-index:3;background:var(--gold);color:var(--ink);border-radius:999px;font-weight:800;font-size:12px;padding:2px 8px}
+.discard .card{--w:84px}
+.discard .card.pop{animation:pop .28s ease-out}
+.need{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--dim);flex-wrap:wrap;justify-content:center}
+@keyframes pop{from{transform:scale(1.07)}to{transform:none}}
+@keyframes nudge{50%{transform:translateY(-5px)}}
+.status{text-align:center;min-height:44px;display:grid;gap:2px;align-content:center}
+.status .last{font-size:13px;color:var(--dim)}
+.status .now{font-weight:800;font-size:16px;text-wrap:balance}
+.status.mine .now{color:var(--gold)}
+.me{display:grid;gap:4px;margin-top:auto}
+.meh{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.acts{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;padding-top:6px}
+.chips{display:inline-flex;gap:3px;flex-wrap:wrap;align-items:center;vertical-align:middle}
+.chips i{display:block;width:13px;height:13px;border-radius:50%}
+.chips .one{background:#fff;box-shadow:inset 0 0 0 2px #cfcbe8}
+.chips .ten{background:#0e0d24;box-shadow:inset 0 0 0 2px var(--gold)}
+
+/* results */
+.results{display:grid;gap:10px}
+.results h2{font:400 26px/1.1 var(--display);color:var(--gold);text-align:center;text-wrap:balance}
+.rlist{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.rrow{background:var(--panel);border:2px solid var(--line);border-radius:14px;padding:10px 12px;display:grid;gap:6px}
+.rrow.goer{border-color:var(--teal)}
+.rh{display:flex;align-items:center;gap:8px}
+.rh .nm{flex:1;min-width:0}
+.delta{font:400 20px/1 var(--display)}
+.delta.up{color:#ff9db9}.delta.down{color:#7fe3d6}
+.mini{display:flex;gap:4px;flex-wrap:wrap;min-height:30px;align-items:center}
+.rt{font-size:13px;color:var(--dim);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+#toast{position:fixed;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:20;display:grid;justify-items:center;pointer-events:none}
+#toast span{background:#0e0d24;border:2px solid var(--gold);color:var(--fg);padding:10px 16px;border-radius:14px;font-weight:700;max-width:100%;text-align:center}
+#toast span[hidden]{display:none}
+@media (min-width:700px){
+  .hand{--w:70px}
+  .discard .card{--w:96px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+}
+</style>
+
+<div id="app"></div>
+<div id="toast" role="status" aria-live="polite"><span hidden></span></div>
+
+<script id="engine">
+/* Pure rules engine for Llama. No DOM, no network: every move is a function from one game state to the next. */
+const Engine=(function(){
+  const LLAMA=7, WIN_AT=40, HAND=6, MAXP=6;
+  const rnd=n=>Math.floor(Math.random()*n);
+  const clone=o=>JSON.parse(JSON.stringify(o));
+  function shuffle(a){for(let i=a.length-1;i>0;i--){const j=rnd(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;}
+  function newDeck(){const d=[];for(let v=1;v<=7;v++)for(let k=0;k<8;k++)d.push(v);return shuffle(d);}  // eight each of 1-6 and Llama
+  const val=c=>c===LLAMA?10:c;
+  const nextOf=c=>c===LLAMA?1:c+1;            // 1..6, Llama, then back to 1
+  const canPlay=(c,top)=>c===top||c===nextOf(top);
+  function penalty(hand){let s=0;const seen=new Set();for(const c of hand){if(!seen.has(c)){seen.add(c);s+=val(c);}}return s;}  // duplicates count once
+
+  function deal(b){
+    const deck=newDeck(),n=b.players.length,hands=[];
+    for(let i=0;i<n;i++)hands.push(deck.splice(deck.length-HAND,HAND));
+    const discard=[deck.pop()];
+    return {phase:'playing',rev:(b.rev||0)+1,at:Date.now(),round:b.round,hostId:b.hostId,players:b.players,hands,
+      out:Array(n).fill(false),scores:b.scores,deck,discard,turn:b.starter,starter:b.starter,
+      last:{t:'start',seat:b.starter},result:null,winners:null};
+  }
+  function nextRound(s){const n=s.players.length;return deal({players:s.players,scores:s.scores.slice(),round:s.round+1,starter:(s.starter+1)%n,hostId:s.hostId,rev:s.rev});}
+  function restart(s){const n=s.players.length;return deal({players:s.players,scores:Array(n).fill(0),round:1,starter:(s.starter+1)%n,hostId:s.hostId,rev:s.rev});}
+
+  function nextSeat(s,seat){const n=s.players.length;let i=seat;do{i=(i+1)%n;}while(s.out[i]);return i;}
+
+  function finishRound(s,goer){
+    const rows=[];
+    for(let i=0;i<s.players.length;i++){
+      const before=s.scores[i];
+      const delta=i===goer?-(before>=10?10:before>=1?1:0):penalty(s.hands[i]);   // going out returns a 10 chip if you hold one, else a 1
+      s.scores[i]=before+delta;
+      rows.push({seat:i,goer:i===goer,folded:i!==goer&&s.out[i],penalty:i===goer?0:delta,delta,before,after:s.scores[i]});
+    }
+    s.result={round:s.round,goer,rows};
+    const over=s.scores.some(x=>x>=WIN_AT);
+    s.phase=over?'gameEnd':'roundEnd';
+    if(over){const m=Math.min(...s.scores);s.winners=s.scores.map((x,i)=>x===m?i:-1).filter(i=>i>=0);}
+    s.last={t:'end',seat:goer};
+    s.rev++;s.at=Date.now();
+    return s;
+  }
+
+  /* Returns the next state, or null if the move is not legal. */
+  function act(st,seat,a){
+    if(!st||st.phase!=='playing'||st.turn!==seat||st.out[seat])return null;
+    const s=clone(st),hand=s.hands[seat],top=s.discard[s.discard.length-1];
+    if(a.t==='play'){
+      const i=hand.indexOf(a.card);
+      if(i<0||!canPlay(a.card,top))return null;
+      hand.splice(i,1);s.discard.push(a.card);s.last={t:'play',seat,card:a.card};
+      if(!hand.length)return finishRound(s,seat);
+    }else if(a.t==='draw'){
+      if(!s.deck.length)return null;
+      hand.push(s.deck.pop());s.last={t:'draw',seat};
+    }else if(a.t==='fold'){
+      s.out[seat]=true;s.last={t:'fold',seat};
+      if(s.out.every(Boolean))return finishRound(s,-1);
+    }else return null;
+    s.turn=nextSeat(s,seat);s.rev++;s.at=Date.now();
+    return s;
+  }
+
+  function botChoose(s,seat){
+    const hand=s.hands[seat],top=s.discard[s.discard.length-1];
+    const playable=[...new Set(hand.filter(c=>canPlay(c,top)))];
+    const pen=penalty(hand);
+    if(playable.length){
+      let best=playable[0],bs=-1e9;
+      for(const c of playable){
+        const rest=hand.slice();rest.splice(rest.indexOf(c),1);
+        const gain=pen-penalty(rest);
+        const chain=rest.includes(nextOf(c))?1.5:0;
+        const sc=gain*2+chain+(c===top?0.4:0)+Math.random()*1.2;
+        if(sc>bs){bs=sc;best=c;}
+      }
+      return {t:'play',card:best};
+    }
+    if(!s.deck.length)return {t:'fold'};
+    let others=Infinity;
+    for(let i=0;i<s.hands.length;i++)if(i!==seat&&!s.out[i])others=Math.min(others,s.hands[i].length);
+    let bias=pen>=18?0.75:pen>=13?0.3:0.04;
+    if(others<=2&&pen>=8)bias+=0.35;
+    return Math.random()<bias?{t:'fold'}:{t:'draw'};
+  }
+
+  return {LLAMA,WIN_AT,HAND,MAXP,rnd,clone,shuffle,val,nextOf,canPlay,penalty,deal,nextRound,restart,act,botChoose};
+})();
+</script>
+
+<script id="game">
+(function(){
+'use strict';
+const {LLAMA,WIN_AT,MAXP,canPlay,nextOf,penalty}=Engine;
+const SEATC=['#2bb7a8','#f4b73f','#e2427c','#9a86f5','#7bc65a','#ff8a4c'];
+const BOTNAMES=['Pacha','Wooly','Inti','Chaska','Quinoa','Vicky'];
+const LLAMA_SVG='<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M15 63 24 31h15l11 32z" fill="currentColor"/><circle cx="26" cy="50" r="7" fill="#fff" opacity=".4"/><circle cx="38" cy="55" r="7.5" fill="#fff" opacity=".4"/><circle cx="30" cy="41" r="5" fill="#fff" opacity=".4"/><ellipse cx="33" cy="23" rx="10" ry="9" fill="currentColor"/><rect x="36" y="20" width="16" height="11" rx="5.5" fill="currentColor"/><path d="M26 17 22 3q5-1 7 5l2 9zM34 15l1-13q5 0 5 6l-1 8z" fill="currentColor"/><circle cx="31" cy="12" r="5" fill="currentColor"/><circle cx="38" cy="22" r="1.8" fill="#fff"/></svg>';
+
+const App={screen:'home',local:false,db:null,user:null,uid:null,canWrite:null,online:'checking',onlineMsg:'',
+  name:'',code:null,game:null,members:[],subs:[],busy:false,botT:0,botRev:null,botN:3,rulesOpen:false,
+  prefill:'',connT:0,connectSlow:false,lastRev:-1,transport:'claude'};
+let foldArm=false,foldT=0,toastT=0;
+
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function store(k,v){try{if(v===undefined)return localStorage.getItem(k);if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v);}catch(e){}return null;}
+function toast(msg){const el=$('#toast span');el.textContent=msg;el.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{el.hidden=true;},2800);}
+const myId=()=>App.local?'me':App.uid;
+const mySeat=()=>{const s=App.game;return s&&s.players?s.players.findIndex(p=>p.id===myId()):-1;};
+const amDriver=()=>App.local||(App.game&&App.game.hostId===App.uid);
+const gref=code=>App.db.collection('games').doc(code);
+const cleanName=()=>(App.name||'').trim().slice(0,14)||'Player';
+const initial=n=>esc(([...String(n||'?')][0]||'?').toUpperCase());
+
+/* ---------- card + small pieces ---------- */
+function cardFace(v){return v===LLAMA?LLAMA_SVG:String(v);}
+function cardLabel(v){return v===LLAMA?'Llama':String(v);}
+function card(v,cls,tag,attrs){
+  tag=tag||'div';
+  return `<${tag} class="card v${v} ${cls||''}" ${attrs||''} aria-label="${cardLabel(v)}">${cardFace(v)}</${tag}>`;
+}
+const mini=(v,cls)=>`<span class="mc v${v} ${cls||''}" title="${cardLabel(v)}">${v===LLAMA?LLAMA_SVG:v}</span>`;
+function chips(score){
+  const t=Math.floor(score/10),o=score%10;let h='';
+  for(let i=0;i<t;i++)h+='<i class="ten"></i>';
+  for(let i=0;i<o;i++)h+='<i class="one"></i>';
+  return h?`<span class="chips" role="img" aria-label="${score} points">${h}</span>`:'';
+}
+
+/* ---------- screens ---------- */
+function homeHTML(){
+  const on=App.online==='ready';
+  const note=App.online==='checking'?'Checking online play…':on?'Rooms hold up to 6 players. Add bots to fill empty seats.':esc(App.onlineMsg);
+  return `<div class="weave"></div>
+  <div class="wrap">
+    <header class="hero">
+      <div class="fan">${card(2)}${card(5)}${card(LLAMA)}</div>
+      <h1>Llama</h1>
+      <p class="tag">Empty your hand before it costs you. 2 to 6 players.</p>
+    </header>
+    <section class="panel">
+      <div class="field"><label class="label" for="name">Your name</label>
+        <input id="name" type="text" maxlength="14" autocomplete="off" placeholder="Player" value="${esc(App.name)}"></div>
+      <button class="btn primary" data-act="create" ${on?'':'disabled'}>Create online room</button>
+      <div class="row joinrow">
+        <input id="code" type="text" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Room code" value="${esc(App.prefill)}">
+        <button class="btn" data-act="join" ${on?'':'disabled'}>Join room</button>
+      </div>
+      <p class="note">${note}</p>
+      <hr>
+      <div class="field"><span class="label">Practice against bots</span>
+        <div class="seg" role="group" aria-label="Number of bots">
+          ${[1,2,3,4,5].map(n=>`<button class="btn small" data-act="bots" data-n="${n}" aria-pressed="${App.botN===n}">${n}</button>`).join('')}
+        </div>
+      </div>
+      <button class="btn" data-act="local">Play ${App.botN} bot${App.botN>1?'s':''}</button>
+    </section>
+    <details class="rules" ${App.rulesOpen?'open':''}>
+      <summary>How to play</summary>
+      <div>
+        <p>Each player starts with 6 cards. The deck holds eight each of 1 to 6 and Llama.</p>
+        <p>On your turn, do one thing: <b>play</b> a card equal to the top card or one higher (6 goes to Llama, Llama goes to 1), <b>draw</b> a card, or <b>fold</b> and sit out the round.</p>
+        <p>The round ends when someone plays their last card or everyone has folded. Everyone else scores the cards left in hand: face value, Llama is 10, and a number only counts once.</p>
+        <p>Going out returns a chip, which lowers your score. The first player to reach ${WIN_AT} points ends the game, and the lowest score wins.</p>
+      </div>
+    </details>
+  </div>`;
+}
+
+function connectingHTML(){
+  return `<div class="weave"></div><div class="wrap"><div class="top"><span class="logo">Llama</span><button class="btn small" data-act="leave">Back</button></div>
+  <section class="panel"><p><b>Connecting to room ${esc(App.code||'')}…</b></p>
+  ${App.connectSlow?'<p class="note">This is taking a while. Check your connection. The room will appear as soon as it answers.</p>':''}</section></div>`;
+}
+
+function lobbyHTML(){
+  const L=App.game,isHost=L.hostId===App.uid;
+  const humans=App.members;
+  const bots=L.bots||[];
+  const seats=humans.length+bots.length;
+  const inRoom=humans.some(m=>m.id===App.uid);
+  let rows='';
+  humans.forEach((m,i)=>{
+    rows+=`<li><span class="av" style="--pc:${SEATC[i%6]}">${initial(m.name)}</span><span class="nm">${esc(m.name||'Player')}</span>
+      ${m.id===L.hostId?'<span class="tagpill good">Host</span>':''}${m.id===App.uid?'<span class="tagpill">You</span>':''}</li>`;
+  });
+  bots.forEach((b,j)=>{
+    const i=humans.length+j;
+    rows+=`<li><span class="av" style="--pc:${SEATC[i%6]}">${initial(b)}</span><span class="nm">${esc(b)}</span><span class="tagpill">Bot</span>
+      ${isHost?`<button class="x" data-act="rmbot" data-i="${j}" aria-label="Remove ${esc(b)}">×</button>`:''}</li>`;
+  });
+  let foot;
+  if(isHost)foot=`<div class="row"><button class="btn" style="flex:1" data-act="addbot" ${seats>=MAXP?'disabled':''}>Add bot</button>
+      <button class="btn primary" style="flex:1" data-act="start" ${seats<2?'disabled':''}>Start game</button></div>
+      ${seats<2?'<p class="note">You need at least 2 players. Add a bot or wait for a friend.</p>':''}`;
+  else if(!inRoom)foot=`<button class="btn primary" data-act="joinhere" ${seats>=MAXP?'disabled':''}>${seats>=MAXP?'Room is full':'Join this room'}</button>`;
+  else foot='<p class="note">Waiting for the host to start the game.</p>';
+  return `<div class="weave"></div><div class="wrap">
+    <div class="top"><span class="logo">Llama</span><button class="btn small" data-act="leave">${isHost?'Close room':'Leave'}</button></div>
+    <section class="panel">
+      <span class="label" style="text-align:center">Room code</span>
+      <div class="code" aria-label="Room code ${esc(App.code)}">${esc(App.code)}</div>
+      <button class="btn" data-act="copy">Copy code</button>
+      ${App.transport==='mqtt'?'<button class="btn" data-act="copylink">Copy invite link</button>':''}
+      <p class="note" style="text-align:center">Friends open this page, tap Join room, and enter the code.</p>
+    </section>
+    <section class="panel">
+      <div class="top"><span class="label">Players</span><span class="label">${seats} of ${MAXP}</span></div>
+      <ul class="plist">${rows}</ul>
+      ${foot}
+    </section>
+  </div>`;
+}
+
+function nm(s,i){return i===mySeat()?'You':esc(s.players[i].name);}
+function lastText(s){
+  const l=s.last||{};
+  if(l.t==='start')return `Round ${s.round}. ${nm(s,s.turn)} ${s.turn===mySeat()?'start':'starts'}.`;
+  if(l.t==='play')return `${nm(s,l.seat)} played ${l.card===LLAMA?'a Llama':'a '+l.card}.`;
+  if(l.t==='draw')return `${nm(s,l.seat)} drew a card.`;
+  if(l.t==='fold')return `${nm(s,l.seat)} folded.`;
+  return '';
+}
+
+function tableHTML(){
+  const s=App.game,seat=mySeat(),n=s.players.length;
+  const top=s.discard[s.discard.length-1];
+  const playing=s.phase==='playing';
+  const myTurn=playing&&seat>=0&&s.turn===seat&&!s.out[seat];
+  const myHand=seat>=0?s.hands[seat].slice().sort((a,b)=>a-b):[];
+  const playableAny=myHand.some(c=>canPlay(c,top));
+  const canDraw=myTurn&&s.deck.length>0;
+  const anim=s.rev!==App.lastRev;
+
+  /* opponents (everyone, when spectating) */
+  let opps='';
+  s.players.forEach((p,i)=>{
+    if(i===seat)return;
+    const out=s.out[i];
+    const meta=out?'Folded':s.hands[i].length+' cards';
+    opps+=`<div class="opp ${playing&&s.turn===i&&!out?'turn':''} ${out?'out':''}">
+      <span class="av" style="--pc:${SEATC[i%6]}">${initial(p.name)}</span>
+      <span style="min-width:0"><span class="nm">${esc(p.name)}</span><span class="meta">${meta}</span></span>
+      <span class="pts"><b>${s.scores[i]}</b><span class="bar"><i style="--p:${Math.min(100,s.scores[i]/WIN_AT*100)}%"></i></span></span></div>`;
+  });
+
+  /* status line */
+  let now='',mine=false;
+  if(playing){
+    if(myTurn){
+      mine=true;
+      if(playableAny)now=`Your turn. Play a ${top===LLAMA?'Llama':top} or ${nextOf(top)===LLAMA?'Llama':nextOf(top)}, draw, or fold.`;
+      else if(s.deck.length)now='Nothing fits. Draw a card or fold.';
+      else now='Nothing fits and the pile is empty. You have to fold.';
+    }else if(seat>=0&&s.out[seat])now='You folded. Watching the rest of the round.';
+    else now=`${esc(s.players[s.turn].name)}${s.players[s.turn].bot?' is thinking…':"'s turn"}`;
+  }
+
+  const need=playing?`<div class="need">Next card: ${mini(top)} or ${mini(nextOf(top))}</div>`:'';
+  const mid=`<div class="mid">
+    <div class="pilecol"><button class="deckbtn ${canDraw?'go':''}" data-act="draw" ${canDraw?'':'disabled'} aria-label="Draw a card, ${s.deck.length} left">
+      <span class="stack"><span class="card back"></span><span class="card back"></span><span class="card back"></span></span>
+      <span class="cnt">${s.deck.length}</span></button><span class="label">Draw</span></div>
+    <div class="pilecol discard">${card(top,anim&&s.last&&s.last.t==='play'?'pop':'')}<span class="label">Discard</span>${need}</div>
+  </div>`;
+
+  /* bottom: hand, or results */
+  let bottom='';
+  if(s.phase==='playing'){
+    if(seat>=0){
+      const pen=penalty(s.hands[seat]);
+      const cards=myHand.map(v=>{
+        const ok=myTurn&&canPlay(v,top);
+        return card(v,ok?'can':(myTurn?'no':''),'button',`data-act="play" data-v="${v}" ${ok?'':'aria-disabled="true"'}`);
+      }).join('');
+      bottom=`<section class="me">
+        <div class="meh"><span><b>You</b> <span class="dim">· hand is worth ${pen} if you fold</span></span><span>${chips(s.scores[seat])} <b>${s.scores[seat]}</b></span></div>
+        ${s.out[seat]?'<p class="dim" style="text-align:center;padding:18px 0">You folded this round.</p>':`<div class="hand">${cards}</div>`}
+        <div class="acts"><button class="btn warn" id="foldbtn" data-act="fold" ${myTurn?'':'disabled'}>Fold</button>
+        ${skipBtn(s)}</div>
+      </section>`;
+    }else bottom=`<section class="me"><p class="dim" style="text-align:center">You are watching this game.</p><div class="acts">${skipBtn(s)}</div></section>`;
+  }else bottom=resultsHTML(s,seat);
+
+  const head=`<div class="top"><span class="logo">Llama</span>
+    <span style="display:flex;gap:8px;align-items:center">${App.local?'<span class="chip">PRACTICE</span>':`<span class="chip">${esc(App.code)}</span>`}
+    <span class="chip">ROUND ${s.round}</span><button class="btn small" data-act="leave">Leave</button></span></div>`;
+  return `<div class="weave"></div><div class="wrap">${head}
+    <div class="opps">${opps}</div>
+    ${mid}
+    <div class="status ${mine?'mine':''}" role="status" aria-live="polite"><span class="last">${playing?lastText(s):''}</span><span class="now">${now}</span></div>
+    ${bottom}</div>`;
+}
+
+function skipBtn(s){
+  if(App.local||!amDriver()||s.phase!=='playing')return '';
+  const t=s.players[s.turn];
+  if(t.id===App.uid||t.bot||s.out[s.turn])return '';
+  const late=Date.now()-(s.at||0)>30000;
+  return `<button class="btn small" id="skipbtn" data-act="skip" ${late?'':'hidden'}>Fold for ${esc(t.name)}</button>`;
+}
+
+function resultsHTML(s,seat){
+  const r=s.result,final=s.phase==='gameEnd';
+  const goer=r.goer>=0?s.players[r.goer]:null;
+  let title;
+  if(final){
+    const names=s.winners.map(i=>i===seat?'You':esc(s.players[i].name));
+    title=names.length===1?`${names[0]} ${names[0]==='You'?'win':'wins'} the game`:`${names.join(' and ')} share the win`;
+  }else title=goer?`${r.goer===seat?'You went':esc(goer.name)+' went'} out`:'Everyone folded';
+  const rows=r.rows.map(row=>{
+    const p=s.players[row.seat];
+    const seen=new Set();
+    const hand=s.hands[row.seat].slice().sort((a,b)=>a-b).map(v=>{const d=seen.has(v);seen.add(v);return mini(v,d?'dup':'');}).join('');
+    const d=row.delta;
+    return `<li class="rrow ${row.goer?'goer':''}">
+      <div class="rh"><span class="av" style="--pc:${SEATC[row.seat%6]}">${initial(p.name)}</span><span class="nm">${row.seat===seat?'You':esc(p.name)}</span>
+        ${row.goer?'<span class="tagpill good">Out</span>':row.folded?'<span class="tagpill">Folded</span>':''}
+        <span class="delta ${d>0?'up':d<0?'down':''}">${d>0?'+':''}${d}</span></div>
+      <div class="mini">${hand||'<span class="dim">No cards left</span>'}</div>
+      <div class="rt">${row.goer?(d<0?`Returned a chip`:'No chip to return'):`Hand scores ${row.penalty}`}<span>· total ${row.after}</span>${chips(row.after)}</div>
+    </li>`;
+  }).join('');
+  const btns=seat<0?'':final
+    ?`<div class="acts"><button class="btn primary" data-act="again">Play again</button><button class="btn" data-act="leave">Leave</button></div>`
+    :`<div class="acts"><button class="btn primary" data-act="next">Next round</button></div>`;
+  return `<section class="results"><h2>${title}</h2>
+    ${final?`<p class="note" style="text-align:center">Someone reached ${WIN_AT} points. Lowest score wins.</p>`:'<p class="note" style="text-align:center">Faded cards are duplicates and count once.</p>'}
+    <ul class="rlist">${rows}</ul>${btns}</section>`;
+}
+
+/* ---------- render ---------- */
+function render(){
+  const a=document.activeElement,fid=a&&a.id,ss=a&&a.selectionStart;
+  let html;
+  if(App.screen==='home')html=homeHTML();
+  else if(App.screen==='local')html=tableHTML();
+  else if(!App.game)html=connectingHTML();
+  else if(App.game.phase==='lobby')html=lobbyHTML();
+  else html=tableHTML();
+  foldArm=false;clearTimeout(foldT);
+  $('#app').innerHTML=html;
+  if(App.game)App.lastRev=App.game.rev;
+  if(fid){const el=document.getElementById(fid);if(el){el.focus();try{if(ss!=null)el.setSelectionRange(ss,ss);}catch(e){}}}
+}
+
+/* ---------- moves ---------- */
+async function commit(next){
+  if(App.local){App.game=next;render();drive();return true;}
+  if(App.busy)return false;
+  App.busy=true;
+  try{await gref(App.code).set(next);return true;}
+  catch(e){
+    toast(e&&e.code==='invalid_argument'?'You need edit access to play online. Ask the page owner to share it with you as a Contributor.':'That move did not go through. Try again.');
+    return false;
+  }finally{App.busy=false;}
+}
+async function humanAct(a){
+  const s=App.game,seat=mySeat();
+  if(!s||seat<0)return;
+  const next=Engine.act(s,seat,a);
+  if(!next){toast(a.t==='play'?'That card does not fit the pile.':'You cannot do that right now.');return;}
+  await commit(next);
+}
+function drive(){
+  const s=App.game;
+  if(!s||s.phase!=='playing'||!amDriver())return;
+  const p=s.players[s.turn];
+  if(!p.bot||s.out[s.turn])return;
+  if(App.botRev===s.rev)return;
+  App.botRev=s.rev;
+  clearTimeout(App.botT);
+  const rev=s.rev;
+  App.botT=setTimeout(async()=>{
+    const cur=App.game;
+    if(!cur||cur.rev!==rev||cur.phase!=='playing')return;
+    const next=Engine.act(cur,cur.turn,Engine.botChoose(cur,cur.turn));
+    if(!next)return;
+    const ok=await commit(next);
+    if(!ok){App.botRev=null;setTimeout(drive,1500);}
+  },850+Engine.rnd(700));
+}
+
+/* ---------- local (bots) ---------- */
+function startLocal(){
+  const bots=BOTNAMES.slice(0,App.botN);
+  const players=[{id:'me',name:cleanName(),bot:false},...bots.map((b,i)=>({id:'bot'+i,name:b,bot:true}))];
+  App.local=true;App.screen='local';App.botRev=null;
+  App.game=Engine.deal({players,scores:Array(players.length).fill(0),round:1,starter:Engine.rnd(players.length),hostId:'me'});
+  render();drive();
+}
+
+/* ---------- online ---------- */
+function onlineOK(){
+  if(App.online!=='ready'){toast(App.onlineMsg||'Online play is not ready yet.');return false;}
+  return true;
+}
+const makeCode=()=>{const A='ABCDEFGHJKLMNPQRSTUVWXYZ';let c='';for(let i=0;i<4;i++)c+=A[Engine.rnd(A.length)];return c;};
+
+async function createRoom(){
+  if(!onlineOK())return;
+  store('llama.name',cleanName());
+  try{
+    for(let t=0;t<6;t++){
+      const code=makeCode(),ref=gref(code);
+      const snap=await ref.get();
+      if(snap.exists)continue;
+      await ref.set({phase:'lobby',hostId:App.uid,bots:[],created:Date.now()});
+      await ref.collection('members').doc(App.uid).set({name:cleanName(),joinedAt:Date.now()});
+      return enterRoom(code);
+    }
+    toast('Could not find a free room code. Try again.');
+  }catch(e){writeFail(e);}
+}
+async function joinRoom(code,fromHere){
+  if(!onlineOK())return;
+  code=(code||'').toUpperCase().replace(/[^A-Z]/g,'');
+  if(code.length!==4){toast('Enter the 4-letter room code.');return;}
+  store('llama.name',cleanName());
+  try{
+    const ref=gref(code),snap=await ref.get();
+    if(!snap.exists){toast('No room with that code.');return;}
+    const d=snap.data();
+    if(d.phase==='lobby'){
+      const ms=await ref.collection('members').get();
+      const mine=ms.docs.some(x=>x.id===App.uid);
+      if(!mine&&ms.size+(d.bots||[]).length>=MAXP){toast('That room is full.');return;}
+      if(!mine)await ref.collection('members').doc(App.uid).set({name:cleanName(),joinedAt:Date.now()});
+    }
+    if(!fromHere)await enterRoom(code);
+  }catch(e){writeFail(e);}
+}
+function writeFail(e){
+  toast(e&&e.code==='invalid_argument'?'You need edit access to play online. Ask the page owner to share it with you as a Contributor.':'Could not reach the room. Try again.');
+}
+async function enterRoom(code,resume){
+  App.subs.forEach(u=>{try{u();}catch(e){}});App.subs=[];
+  App.code=code;App.screen='room';App.game=null;App.members=[];App.connectSlow=false;App.botRev=null;
+  const ref=gref(code);
+  if(resume){
+    try{const s=await ref.get();if(!s.exists){store('llama.room',null);return goHome('That room has ended.');}}
+    catch(e){return goHome('Could not reach your last room.');}
+  }
+  store('llama.room',code);
+  try{location.hash=code;}catch(e){}
+  App.subs.push(ref.onSnapshot(snap=>{
+    if(!snap.exists){if(snap.metadata.fromCache)return;goHome('This room was closed.');return;}
+    clearTimeout(App.connT);App.connectSlow=false;
+    App.game=snap.data();
+    render();drive();
+  },()=>{toast('Lost the connection to the room.');}));
+  App.subs.push(ref.collection('members').orderBy('joinedAt').onSnapshot(snap=>{
+    App.members=snap.docs.map(d=>Object.assign({id:d.id},d.data()));
+    if(App.screen==='room'&&App.game&&App.game.phase==='lobby')render();
+  },()=>{}));
+  clearTimeout(App.connT);
+  App.connT=setTimeout(()=>{if(!App.game){App.connectSlow=true;render();}},10000);
+  render();
+}
+function goHome(msg){
+  clearTimeout(App.botT);clearTimeout(App.connT);App.botRev=null;
+  App.subs.forEach(u=>{try{u();}catch(e){}});App.subs=[];
+  App.code=null;App.game=null;App.members=[];App.local=false;App.screen='home';
+  store('llama.room',null);
+  try{location.hash='';}catch(e){}
+  render();
+  if(msg)toast(msg);
+}
+async function leave(){
+  const g=App.game,code=App.code;
+  if(!App.local&&App.db&&code&&g&&g.phase==='lobby'){
+    try{
+      if(g.hostId===App.uid){
+        const ms=await gref(code).collection('members').get();
+        for(const d of ms.docs){try{await d.ref?d.ref.delete():gref(code).collection('members').doc(d.id).delete();}catch(e){}}
+        await gref(code).delete();
+      }else await gref(code).collection('members').doc(App.uid).delete();
+    }catch(e){}
+  }
+  goHome();
+}
+async function startGame(){
+  const L=App.game;
+  if(!L||L.phase!=='lobby'||L.hostId!==App.uid)return;
+  const humans=App.members.slice(0,MAXP).map(m=>({id:m.id,name:m.name||'Player',bot:false}));
+  const bots=(L.bots||[]).slice(0,MAXP-humans.length).map((b,i)=>({id:'bot'+i,name:b,bot:true}));
+  const players=[...humans,...bots];
+  if(players.length<2){toast('Add a player or a bot first.');return;}
+  await commit(Engine.deal({players,scores:Array(players.length).fill(0),round:1,starter:Engine.rnd(players.length),hostId:App.uid}));
+}
+async function setBots(list){
+  try{await gref(App.code).update({bots:list});}catch(e){writeFail(e);}
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click',async e=>{
+  const el=e.target.closest('[data-act]');
+  if(!el||el.disabled)return;
+  const a=el.dataset.act,s=App.game;
+  switch(a){
+    case 'bots':App.botN=+el.dataset.n;render();break;
+    case 'local':startLocal();break;
+    case 'create':createRoom();break;
+    case 'join':joinRoom($('#code').value);break;
+    case 'joinhere':joinRoom(App.code,true);break;
+    case 'leave':leave();break;
+    case 'copy':
+      try{await navigator.clipboard.writeText(App.code);toast('Code copied');}
+      catch(err){toast('Room code: '+App.code);}
+      break;
+    case 'copylink':{
+      const link=location.href.split('#')[0]+'#'+App.code;
+      try{await navigator.clipboard.writeText(link);toast('Invite link copied');}
+      catch(err){toast('Share this link: '+link);}
+      break;}
+    case 'addbot':{
+      const L=App.game,used=L.bots||[];
+      const name=BOTNAMES.find(b=>!used.includes(b))||('Bot '+(used.length+1));
+      if(App.members.length+used.length<MAXP)setBots([...used,name]);
+      break;}
+    case 'rmbot':{const b=(App.game.bots||[]).slice();b.splice(+el.dataset.i,1);setBots(b);break;}
+    case 'start':startGame();break;
+    case 'play':
+      if(el.getAttribute('aria-disabled')==='true'){
+        if(s&&s.phase==='playing'&&s.turn===mySeat()){const t=s.discard[s.discard.length-1];toast(`Needs a ${t===LLAMA?'Llama':t} or ${nextOf(t)===LLAMA?'Llama':nextOf(t)}.`);}
+        else toast('Wait for your turn.');
+        break;
+      }
+      humanAct({t:'play',card:+el.dataset.v});break;
+    case 'draw':humanAct({t:'draw'});break;
+    case 'fold':
+      if(!foldArm){
+        foldArm=true;el.textContent='Tap again to fold';
+        clearTimeout(foldT);foldT=setTimeout(()=>{foldArm=false;if(el.isConnected)el.textContent='Fold';},3000);
+      }else{foldArm=false;humanAct({t:'fold'});}
+      break;
+    case 'next':if(s&&s.phase==='roundEnd'&&mySeat()>=0)commit(Engine.nextRound(s));break;
+    case 'again':if(s&&s.phase==='gameEnd'&&mySeat()>=0)commit(Engine.restart(s));break;
+    case 'skip':{
+      if(s&&s.phase==='playing'&&amDriver()){const next=Engine.act(s,s.turn,{t:'fold'});if(next)commit(next);}
+      break;}
+  }
+});
+document.addEventListener('input',e=>{
+  if(e.target.id==='name'){App.name=e.target.value;}
+  if(e.target.id==='code'){const v=e.target.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,4);e.target.value=v;App.prefill=v;}
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&e.target.id==='code')joinRoom(e.target.value);
+});
+document.addEventListener('toggle',e=>{if(e.target.matches&&e.target.matches('details.rules'))App.rulesOpen=e.target.open;},true);
+window.addEventListener('hashchange',()=>{
+  const h=(location.hash||'').replace('#','').toUpperCase();
+  if(App.screen==='home'&&/^[A-Z]{4}$/.test(h)){App.prefill=h;render();}
+});
+setInterval(()=>{const b=document.getElementById('skipbtn');if(b&&App.game)b.hidden=!(Date.now()-(App.game.at||0)>30000);},3000);
+
+/* ---------- relay adapter: the same document API the game uses, backed by retained MQTT messages ---------- */
+/*MQTT-START*/
+function makeMqttDB(client,NS){
+  const subs=new Map(),cache=new Map();
+  const match=(f,t)=>{const a=f.split('/'),b=t.split('/');return a.length===b.length&&a.every((x,i)=>x==='+'||x===b[i]);};
+  client.on('message',(topic,buf)=>{
+    const txt=buf.toString();let data=null;
+    if(txt){try{data=JSON.parse(txt);}catch(e){return;}}
+    if(data==null)cache.delete(topic);else cache.set(topic,data);
+    subs.forEach((fns,f)=>{if(match(f,topic))fns.forEach(fn=>fn(topic,data));});
+  });
+  function sub(filter,fn){
+    let fns=subs.get(filter);
+    if(!fns){fns=new Set();subs.set(filter,fns);}
+    fns.add(fn);
+    client.subscribe(filter,{qos:1});   // the broker resends retained state on every subscribe
+    return()=>{fns.delete(fn);if(!fns.size){subs.delete(filter);try{client.unsubscribe(filter);}catch(e){}}};
+  }
+  const meta={fromCache:false,hasPendingWrites:false};
+  const snap=(id,data)=>({id,exists:data!=null,data:()=>data==null?undefined:data,metadata:meta});
+  function pub(topic,data){
+    if(data==null)cache.delete(topic);else cache.set(topic,data);
+    return new Promise((res,rej)=>{
+      const t=setTimeout(()=>rej({code:'unavailable',message:'timeout'}),8000);
+      client.publish(topic,data==null?'':JSON.stringify(data),{qos:1,retain:true},err=>{clearTimeout(t);if(err)rej({code:'unavailable',message:String(err)});else res();});
+    });
+  }
+  function readMany(filter,ms){
+    return new Promise(res=>{
+      const got=new Map();
+      const off=sub(filter,(t,d)=>{if(d==null)got.delete(t);else got.set(t,d);});
+      setTimeout(()=>{off();res(got);},ms);
+    });
+  }
+  function docRef(topic){
+    const ref={id:topic.split('/').pop(),path:topic,
+      get(){return readMany(topic,900).then(m=>snap(ref.id,m.get(topic)));},
+      set(d){return pub(topic,d);},
+      update(p){const cur=cache.get(topic);if(!cur)return Promise.reject({code:'invalid_argument',message:'missing'});return pub(topic,Object.assign({},cur,p));},
+      delete(){return pub(topic,null);},
+      onSnapshot(next){
+        let seen=false;
+        const off=sub(topic,(t,d)=>{seen=true;next(snap(ref.id,d));});
+        const tm=setTimeout(()=>{if(!seen)next(snap(ref.id,null));},1500);
+        return()=>{clearTimeout(tm);off();};
+      },
+      collection(name){return colRef(topic.slice(0,topic.lastIndexOf('/'))+'/'+name);}
+    };
+    return ref;
+  }
+  function colRef(base,orderField){
+    function mk(m){
+      const docs=[...m.entries()].map(([t,d])=>({id:t.split('/').pop(),data:()=>d,ref:docRef(t)}));
+      if(orderField)docs.sort((a,b)=>((a.data()[orderField]||0)-(b.data()[orderField]||0))||(a.id<b.id?-1:1));
+      return {docs,size:docs.length,empty:!docs.length,metadata:meta};
+    }
+    return {
+      doc(id){return docRef(base+'/'+id);},
+      orderBy(f){return colRef(base,f);},
+      get(){return readMany(base+'/+',1000).then(mk);},
+      onSnapshot(next){
+        const items=new Map();let seen=false,tm=0;
+        const emit=()=>{seen=true;next(mk(items));};
+        const off=sub(base+'/+',(t,d)=>{if(d==null)items.delete(t);else items.set(t,d);clearTimeout(tm);tm=setTimeout(emit,40);});
+        const t0=setTimeout(()=>{if(!seen)emit();},1200);
+        return()=>{clearTimeout(tm);clearTimeout(t0);off();};
+      }
+    };
+  }
+  return {collection(){return {doc(code){return docRef(NS+'/'+code+'/game');}};}};
+}
+/*MQTT-END*/
+
+/* ---------- boot ---------- */
+async function finishOnline(){
+  App.online='ready';
+  const saved=store('llama.room');
+  if(saved&&/^[A-Z]{4}$/.test(saved)&&(!App.prefill||App.prefill===saved)){await enterRoom(saved,true);return;}
+  render();
+}
+function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('load'));document.head.appendChild(s);});}
+function connectRelay(uid){
+  const urls=['wss://broker.emqx.io:8084/mqtt','wss://broker.hivemq.com:8884/mqtt'];
+  return new Promise((resolve,reject)=>{
+    let i=0;
+    const next=()=>{
+      if(i>=urls.length)return reject(new Error('no relay'));
+      const c=mqtt.connect(urls[i++],{clientId:'llama_'+uid+'_'+Math.random().toString(16).slice(2,8),clean:true,reconnectPeriod:2500,connectTimeout:6000,keepalive:30});
+      let done=false;
+      const t=setTimeout(()=>{if(!done){try{c.end(true);}catch(e){}next();}},7000);
+      c.on('error',()=>{});
+      c.once('connect',()=>{done=true;clearTimeout(t);resolve(c);});
+    };
+    next();
+  });
+}
+async function bootRelay(){
+  try{
+    await loadScript('https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js');
+    let uid=store('llama.uid');
+    if(!uid||!/^[A-Za-z0-9]{10,}$/.test(uid)){
+      uid='p'+Array.from(crypto.getRandomValues(new Uint8Array(9)),b=>b.toString(36).padStart(2,'0')).join('');
+      store('llama.uid',uid);
+    }
+    const client=await connectRelay(uid);
+    client.on('offline',()=>toast('Connection lost. Reconnecting…'));
+    App.db=makeMqttDB(client,'llamacards-9c41e7');
+    App.uid=uid;App.transport='mqtt';
+    await finishOnline();
+  }catch(e){App.online='off';App.onlineMsg='Could not reach the online relay. Check your connection. Bots still work.';render();}
+}
+async function boot(){
+  App.name=store('llama.name')||'';
+  const h=(location.hash||'').replace('#','').toUpperCase();
+  if(/^[A-Z]{4}$/.test(h))App.prefill=h;
+  render();
+  if(!window.claude||!window.claude.use){await bootRelay();return;}
+  try{
+    const [db,user]=await Promise.all([claude.use('db'),claude.use('user')]);
+    App.db=db;App.user=user;
+    if(!db){App.online='off';App.onlineMsg='Online play is not available in this view. Bots still work.';render();return;}
+    App.uid=user?await user.id():null;
+    if(!App.uid){App.online='off';App.onlineMsg='Sign in to play online. Bots still work.';render();return;}
+    if(user&&!App.name){try{const me=await user.me();if(me.name){App.name=me.name.slice(0,14);}}catch(e){}}
+    const cw=user?await user.can('data.write'):null;
+    App.canWrite=cw;
+    if(cw===false){App.online='off';App.onlineMsg='Online play needs edit access to this page. Ask the owner to share it with you as a Contributor. Bots still work.';render();return;}
+    await finishOnline();
+  }catch(e){App.online='off';App.onlineMsg='Could not start online play. Bots still work.';render();}
+}
+boot();
+})();
+</script>
+
+</body>
+</html>
